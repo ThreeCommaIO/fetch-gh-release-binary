@@ -132,36 +132,35 @@ func main() {
 		}
 
 		binaryItems := []string{}
-		items, _ := ioutil.ReadDir(dir)
-		for _, item := range items {
-			itemPath := fmt.Sprintf("%s/%s", dir, item.Name())
-
-			file, err := os.Open(itemPath)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer file.Close()
-
-			byteSlice := make([]byte, 512)
-			_, err = file.Read(byteSlice)
-			if err != nil {
-				log.Printf("failed to read file '%s': %s", item.Name(), err)
-				continue
-			}
-
-			if item.Name() == "README.md" {
-				continue
-			}
-			if item.Name() == "LICENSE" {
-				continue
-			}
-
-			if http.DetectContentType(byteSlice) == "application/octet-stream" {
-				if *verbose {
-					log.Printf("selected binary '%s' from tar", item.Name())
+		err := filepath.Walk(dir,
+			func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
 				}
-				binaryItems = append(binaryItems, itemPath)
-			}
+				if info.IsDir() {
+					return nil
+				}
+				file, err := os.Open(path)
+				if err != nil {
+					log.Fatal(err)
+				}
+				defer file.Close()
+
+				byteSlice := make([]byte, 512)
+				_, err = file.Read(byteSlice)
+				if err != nil {
+					return err
+				}
+				if http.DetectContentType(byteSlice) == "application/octet-stream" {
+					if *verbose {
+						log.Printf("selected binary '%s' from tar", filepath.Base(path))
+					}
+					binaryItems = append(binaryItems, path)
+				}
+				return nil
+			})
+		if err != nil {
+			log.Fatalf("failed to walk tempdir: %s", err)
 		}
 
 		if len(binaryItems) != 1 {
