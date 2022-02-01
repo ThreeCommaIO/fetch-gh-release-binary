@@ -48,7 +48,7 @@ runs:
         "-version=${{ inputs.version }}" \
         "-asset-pattern=${{ inputs.asset-pattern }}" \
         "-install-path=${{ inputs.install-path }}" \
-        "-verbose=${{ inputs.verbose }}"
+        "-verbose=${{ inputs.verbose }}" \
         "-token=${{ inputs.token }}"
 
       rm $BINARY_NAME
