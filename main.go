@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v39/github"
+	"golang.org/x/oauth2"
 )
 
 var owner = flag.String("owner", "", "Owner of the repo with the release asset")
@@ -24,6 +25,7 @@ var binaryVersion = flag.String("version", "", "Version of the release asset to 
 var assetPattern = flag.String("asset-pattern", "", "Pattern the asset name must match")
 var installPath = flag.String("install-path", "", "Where to put the installed binary")
 var verbose = flag.Bool("verbose", false, "whether to enable verbose logging")
+var token = flag.String("token", "", "Github token to use for authentication")
 
 var githubToken = os.Getenv("GITHUB_TOKEN")
 var githubPath = os.Getenv("GITHUB_PATH")
@@ -48,12 +50,20 @@ func main() {
 		log.Fatalf("asset-pattern (%s) was not a valid regexp: %s", *assetPattern, err)
 	}
 
+	httpClient := &http.Client{}
+	httpRequestCtx := context.Background()
+
+	if *token != "" {
+		httpClient = oauth2.NewClient(httpRequestCtx, oauth2.StaticTokenSource(&oauth2.Token{
+			AccessToken: *token,
+			TokenType:   "Bearer",
+		}))
+	}
+	client := github.NewClient(httpClient)
+
 	// list releases for the repo
 	log.Printf("listing releases for %s/%s", *owner, *repo)
-	client := github.NewClient(nil)
-
 	var release *github.RepositoryRelease
-	httpRequestCtx := context.Background()
 	if *binaryVersion == "" {
 		// if there is no version, then use the latest
 		releases, _, err := client.Repositories.ListReleases(httpRequestCtx, *owner, *repo, nil)
@@ -80,26 +90,26 @@ func main() {
 	}
 
 	// find the asset to download from a number of release assets
-	assetDownloadURL := ""
+	var asset *github.ReleaseAsset
 	for _, v := range release.Assets {
 		if *verbose {
 			log.Printf("checking asset with name: %s", *v.Name)
 		}
 		if assetPatternRegexp.MatchString(*(v.Name)) {
-			assetDownloadURL = v.GetBrowserDownloadURL()
+			asset = v
 			if *verbose {
 				log.Printf("selected asset with name: %s", *v.Name)
 			}
 			break
 		}
 	}
-	if assetDownloadURL == "" {
+	if asset == nil {
 		log.Fatalf("No matching release assets found")
 	}
 
 	// download the asset to a tempdir
-	log.Printf("downloading matching asset: %s", assetDownloadURL)
-	resp, err := http.Get(assetDownloadURL)
+	log.Printf("downloading matching asset: %s", *asset.Name)
+	rc, _, err := client.Repositories.DownloadReleaseAsset(httpRequestCtx, *owner, *repo, *asset.ID, httpClient)
 	if err != nil {
 		log.Fatalf("failed to get release asset: %s", err)
 	}
@@ -108,14 +118,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to make tempdir: %s", err)
 	}
+	defer rc.Close()
 	defer os.RemoveAll(dir)
 
 	// extract the download if needed
 	var binaryPath string
-	if strings.HasSuffix(assetDownloadURL, ".tar.gz") {
+	if strings.HasSuffix(*asset.Name, ".tar.gz") {
 		log.Println("unpacking tar.gz to temp dir")
 
-		err = untar(dir, resp.Body)
+		err = untar(dir, rc)
 		if err != nil {
 			log.Fatalf("failed to untar data: %s", err)
 		}
@@ -166,7 +177,7 @@ func main() {
 			log.Fatalf("failed to write binary to temp path: %s", err)
 		}
 		defer out.Close()
-		io.Copy(out, resp.Body)
+		io.Copy(out, rc)
 	}
 
 	// move the downloaded binary to the installPath
