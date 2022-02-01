@@ -33,7 +33,7 @@ runs:
   using: "composite"
   steps:
   - run: |
-      VERSION=0.4.0
+      VERSION=0.4.1
       BINARY_NAME=fetch-gh-release-binary
       ASSET_NAME=${BINARY_NAME}_${VERSION}_Linux_amd64.tar.gz
 
