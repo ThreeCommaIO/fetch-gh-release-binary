@@ -24,17 +24,22 @@ inputs:
     required: false
   GITHUB_TOKEN:
     required: false
+  token:
+    required: false
+    description: "GitHub token to use for authentication"
+    default: ""
+
 runs:
   using: "composite"
   steps:
   - run: |
-      VERSION=0.3.2
+      VERSION=0.4.0
       BINARY_NAME=fetch-gh-release-binary
       ASSET_NAME=${BINARY_NAME}_${VERSION}_Linux_amd64.tar.gz
 
-      echo Fetching https://github.com/charlieegan3/fetch-gh-release-binary/releases/download/$VERSION/$ASSET_NAME
+      echo Fetching https://github.com/threecommaio/fetch-gh-release-binary/releases/download/$VERSION/$ASSET_NAME
 
-      curl -LO https://github.com/charlieegan3/fetch-gh-release-binary/releases/download/$VERSION/$ASSET_NAME
+      curl -LO https://github.com/threecommaio/fetch-gh-release-binary/releases/download/$VERSION/$ASSET_NAME
       tar -zxf $ASSET_NAME
 
       ./$BINARY_NAME \
@@ -44,6 +49,7 @@ runs:
         "-asset-pattern=${{ inputs.asset-pattern }}" \
         "-install-path=${{ inputs.install-path }}" \
         "-verbose=${{ inputs.verbose }}"
+        "-token=${{ inputs.token }}"
 
       rm $BINARY_NAME
     shell: bash
